@@ -1,0 +1,5 @@
+/exported
+/node_modules
+
+# ignore file prefix
+e-pkwt-*
