@@ -1,4 +1,5 @@
 const admin = require("firebase-admin");
+const moment = require("moment");
 const { getFirestore, doc, Query } = require("firebase-admin/firestore");
 const fs = require("fs");
 const cliProgress = require("cli-progress");
@@ -31,50 +32,80 @@ const dbSource = getFirestore(sourceProject);
 const dbDestination = getFirestore(destinationProject, "pkwt-prod-dev-temp");
 
 /**
- * 
- * @param {admin.firestore.QueryDocumentSnapshot} perusahaan 
+ *
+ * @param {admin.firestore.QueryDocumentSnapshot} perusahaan
  */
 const loadAllSourceData = async (perusahaan) => {
   // load client
-  const clients = await dbSource.collection('client').where('perusahaan', '==', perusahaan.ref).get()
+  const clients = await dbSource
+    .collection("client")
+    .where("perusahaan", "==", perusahaan.ref)
+    .get();
   // load department tk per client
-  let departmentTk = []
+  let departmentTk = [];
   for (let index = 0; index < clients.docs.length; index++) {
     const docClient = clients.docs[index];
-    const depTks = await dbSource.collection('departmentTK').where('clientId', '==', docClient.ref).get()
-    departmentTk = [...departmentTk, ...depTks.docs]
+    const depTks = await dbSource
+      .collection("departmentTK")
+      .where("clientId", "==", docClient.ref)
+      .get();
+    departmentTk = [...departmentTk, ...depTks.docs];
   }
 
   // load karyawan
-  const karyawans = await dbSource.collection('karyawan').where('perusahaan', '==', perusahaan.ref).get();
+  const karyawans = await dbSource
+    .collection("karyawan")
+    .where("perusahaan", "==", perusahaan.ref)
+    .get();
   // load departmentfrom Karyawan
-  let departments = []
-  let jabatans = []
+  let departments = [];
+  let jabatans = [];
   for (let index = 0; index < karyawans.docs.length; index++) {
     const karDoc = karyawans.docs[index];
-    const karData = karDoc.data()
+    const karData = karDoc.data();
     const theDeparts = await karData.department.get();
     const theJabatans = theDeparts.data().listJabatanRef;
     for (let indJabatan = 0; indJabatan < theJabatans.length; indJabatan++) {
       const theJabatan = theJabatans[indJabatan];
       const jabatanSnap = await theJabatan.get();
-      jabatans.push(jabatanSnap)
+      jabatans.push(jabatanSnap);
     }
-    departments.push(theDeparts)
+    departments.push(theDeparts);
   }
 
   // load sample Document
-  const sampleDocuments = await dbSource.collection('sampleDocuments').where('company', '==', perusahaan.ref).get();
+  const sampleDocuments = await dbSource
+    .collection("sampleDocuments")
+    .where("company", "==", perusahaan.ref)
+    .get();
   // load templates from sample and perusahaan
-  let templates = []
+  let templates = [];
   for (let indSam = 0; indSam < sampleDocuments.docs.length; indSam++) {
     const docSample = sampleDocuments.docs[indSam];
-    const template = await dbSource.collection('templateDocuments').where('perusahaan', '==', perusahaan.ref).where('sampleDocument', '==', docSample.ref).get();
-    templates = [...templates, ...template.docs]
+    const template = await dbSource
+      .collection("templateDocuments")
+      .where("perusahaan", "==", perusahaan.ref)
+      .where("sampleDocument", "==", docSample.ref)
+      .get();
+    templates = [...templates, ...template.docs];
   }
 
   // load data tenaga kerja
+  const tenagaKerjas = await dbSource
+    .collection("tenagaKerja")
+    .where("perusahaan", "==", perusahaan.ref)
+    .get();
   // load generated document
+  let genDocsTk = [];
+  for (let tkInd = 0; tkInd < tenagaKerjas.docs.length; tkInd++) {
+    const tkDoc = tenagaKerjas.docs[tkInd];
+    const generatedDocuments = await dbSource
+      .collection("generatedDocument")
+      .where("perusahaan", "==", perusahaan.ref)
+      .where('tenagaKerja', '==', tkDoc.ref)
+      .get();
+    genDocsTk = [...genDocsTk, ...generatedDocuments.docs];
+  }
 
   console.log(`check data from ${perusahaan.data().nama}`, {
     clients: clients.docs.length,
@@ -83,8 +114,10 @@ const loadAllSourceData = async (perusahaan) => {
     departmentUser: departments.length,
     jabatans: jabatans.length,
     sampleDocuments: sampleDocuments.docs.length,
-    templateDocuments: templates.length
-  })
+    templateDocuments: templates.length,
+    tenagaKerjas: tenagaKerjas.docs.length,
+    generatedDocuments: genDocsTk.length,
+  });
   const returnData = {
     clients: clients.docs,
     departmentTk: departmentTk,
@@ -92,10 +125,12 @@ const loadAllSourceData = async (perusahaan) => {
     departmentUser: departments,
     jabatans: jabatans,
     sampleDocuments: sampleDocuments.docs,
-    templateDocuments: templates
-  }
+    templateDocuments: templates,
+    tenagaKerjas: tenagaKerjas.docs,
+    generatedDocuments: genDocsTk,
+  };
   return returnData;
-}
+};
 
 /**
  *
@@ -111,7 +146,7 @@ const migrateClient = async (perusahaan) => {
   //   .where("perusahaan", "==", perusahaan.ref)
   //   .get();
 
-  console.log('sourceClient', sourceClient.docs);
+  console.log("sourceClient", sourceClient.docs);
   // console.log("perusahaan id :", perusahaan.id);
   // console.log("perusahaan ref :", perusahaan.ref);
 };
@@ -145,6 +180,7 @@ const migratePerusahaanData = async (perusahaan) => {
 };
 
 const startMigrate = async () => {
+  const start = moment();
   try {
     const getSourcePerusahaanList = await dbSource
       .collection("perusahaan")
@@ -161,7 +197,7 @@ const startMigrate = async () => {
       const doc = getSourcePerusahaanList.docs[index];
       const docData = doc.data();
       if (perusahaanToMigrate.includes(docData.nama)) {
-        const sourceData = await loadAllSourceData(doc)
+        const sourceData = await loadAllSourceData(doc);
 
         if (existingPerusahaan.includes(docData.nama)) {
           const destinationPerusahaan = getDestinationPerusahaanList.docs.find(
@@ -171,11 +207,12 @@ const startMigrate = async () => {
         } else {
           // save perusahaan data first
           // await dbDestination.collection("perusahaan").doc(doc.id).set(docData);
-
           // await migratePerusahaanData(doc);
         }
       }
     }
+    const end = moment();
+    console.log("Migration done in ", end.diff(start, "seconds"));
   } catch (error) {
     console.error(error);
   }
