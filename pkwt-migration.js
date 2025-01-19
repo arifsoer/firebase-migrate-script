@@ -1,8 +1,12 @@
+require("dotenv").config();
 const admin = require("firebase-admin");
 const moment = require("moment");
+const { getStorage } = require("firebase-admin/storage");
 const { getFirestore, doc, Query } = require("firebase-admin/firestore");
 const fs = require("fs");
 const cliProgress = require("cli-progress");
+const NodeUtil = require("util");
+const exec = NodeUtil.promisify(require("child_process").exec);
 
 const perusahaanToMigrate = [
   "PT Gemah Ripah",
@@ -11,11 +15,13 @@ const perusahaanToMigrate = [
   "PT.Indobaja",
 ];
 
+let dataCount = 0;
+
 // Initialize Firebase Admin
 const sourceProject = admin.initializeApp(
   {
     credential: admin.credential.applicationDefault(),
-    projectId: "e-pkwt-14644",
+    projectId: process.env.SOURCE_PROJECT ?? "",
   },
   "source"
 );
@@ -23,13 +29,42 @@ const sourceProject = admin.initializeApp(
 const destinationProject = admin.initializeApp(
   {
     credential: admin.credential.applicationDefault(),
-    projectId: "e-pkwt-6d0f0",
+    projectId: process.env.DESTINATION_PROJECT ?? "",
   },
   "destination"
 );
 
-const dbSource = getFirestore(sourceProject);
-const dbDestination = getFirestore(destinationProject, "pkwt-prod-dev-temp");
+// init firestore
+const dbSource = getFirestore(
+  sourceProject,
+  process.env.SOURCE_DB ?? "default"
+);
+const dbDestination = getFirestore(
+  destinationProject,
+  process.env.DESTINATION_DB ?? "pkwt-prod-dev-temp"
+);
+
+// init storage
+const storageSource = getStorage(sourceProject);
+const destinationStorage = getStorage(destinationProject);
+
+/**
+ *
+ * @param {string} path
+ */
+const startMigrateStorage = async (path) => {
+  try {
+    const copyDest = destinationStorage
+      .bucket(process.env.DESTINATION_BUCKET ?? "")
+      .file(path);
+    await storageSource
+      .bucket(process.env.SOURCE_BUCKET ?? "")
+      .file(path)
+      .copy(copyDest);
+  } catch (error) {
+    console.error(error);
+  }
+};
 
 /**
  *
@@ -102,22 +137,11 @@ const loadAllSourceData = async (perusahaan) => {
     const generatedDocuments = await dbSource
       .collection("generatedDocument")
       .where("perusahaan", "==", perusahaan.ref)
-      .where('tenagaKerja', '==', tkDoc.ref)
+      .where("tenagaKerja", "==", tkDoc.ref)
       .get();
     genDocsTk = [...genDocsTk, ...generatedDocuments.docs];
   }
 
-  console.log(`check data from ${perusahaan.data().nama}`, {
-    clients: clients.docs.length,
-    departmentTk: departmentTk.length,
-    karyawans: karyawans.docs.length,
-    departmentUser: departments.length,
-    jabatans: jabatans.length,
-    sampleDocuments: sampleDocuments.docs.length,
-    templateDocuments: templates.length,
-    tenagaKerjas: tenagaKerjas.docs.length,
-    generatedDocuments: genDocsTk.length,
-  });
   const returnData = {
     clients: clients.docs,
     departmentTk: departmentTk,
@@ -132,52 +156,15 @@ const loadAllSourceData = async (perusahaan) => {
   return returnData;
 };
 
-/**
- *
- * @param {admin.firestore.QueryDocumentSnapshot} perusahaan
- */
-const migrateClient = async (perusahaan) => {
-  const sourceClient = await dbSource
-    .collection("client")
-    .where("perusahaan", "==", perusahaan.ref)
-    .get();
-  // const destinationClient = await dbDestination
-  //   .collection("client")
-  //   .where("perusahaan", "==", perusahaan.ref)
-  //   .get();
+const isNeedChangePerusahaanId = (listExistingName, perusahaanName) =>
+  listExistingName.includes(perusahaanName);
 
-  console.log("sourceClient", sourceClient.docs);
-  // console.log("perusahaan id :", perusahaan.id);
-  // console.log("perusahaan ref :", perusahaan.ref);
-};
-
-/**
- *
- * @param {admin.firestore.QueryDocumentSnapshot} perusahaan
- */
-const migrateDepartmentTk = async (perusahaan) => {
-  const sourceDepartmentTk = await dbSource
-    .collection("departmentTk")
-    .where("perusahaan", "==", perusahaanId)
-    .get();
-};
-
-/**
- *
- * migrata data perusahaan
- *
- * @param {admin.firestore.QueryDocumentSnapshot} perusahaan
- */
-const migratePerusahaanData = async (perusahaan) => {
-  const dataPerusahaan = perusahaan.data();
-  console.log("start Migrate Perusahaan ", dataPerusahaan.nama);
-
-  try {
-    await migrateClient(perusahaan);
-  } catch (error) {
-    console.error(error);
-  }
-};
+const extractFilePath = (fileUrl) => {
+  const decodedUrl = decodeURIComponent(fileUrl);
+  const removedQParams = decodedUrl.split("?")[0];
+  const removedBaseUrl = removedQParams.split("com/o/")[1];
+  return removedBaseUrl
+}
 
 const startMigrate = async () => {
   const start = moment();
@@ -199,15 +186,68 @@ const startMigrate = async () => {
       if (perusahaanToMigrate.includes(docData.nama)) {
         const sourceData = await loadAllSourceData(doc);
 
-        if (existingPerusahaan.includes(docData.nama)) {
-          const destinationPerusahaan = getDestinationPerusahaanList.docs.find(
-            (d) => d.data().nama === docData.nama
-          );
-          // await migratePerusahaanData(destinationPerusahaan);
-        } else {
+        const destinationPerusahaan = getDestinationPerusahaanList.docs.find(
+          (d) => d.data().nama === docData.nama
+        );
+
+        if (!existingPerusahaan.includes(docData.nama)) {
           // save perusahaan data first
           // await dbDestination.collection("perusahaan").doc(doc.id).set(docData);
-          // await migratePerusahaanData(doc);
+        }
+
+        // save client
+        for (let index = 0; index < sourceData.clients.length; index++) {
+          const client = sourceData.clients[index];
+          const clientData = client.data();
+          if (isNeedChangePerusahaanId(existingPerusahaan, docData.nama)) {
+            clientData.perusahaan = destinationPerusahaan.ref;
+          }
+          // await dbDestination.collection("client").doc(client.id).set(clientData);
+        }
+
+        // save departmentTK
+        for (let index = 0; index < sourceData.departmentTk.length; index++) {
+          const depTk = sourceData.departmentTk[index];
+          const depTkData = depTk.data();
+          // await dbDestination.collection("departmentTK").doc(depTk.id).set(depTkData);
+        }
+
+        // save karyawan
+        for (let index = 0; index < sourceData.karyawans.length; index++) {
+          const karyawan = sourceData.karyawans[index];
+          const karyawanData = karyawan.data();
+          if (isNeedChangePerusahaanId(existingPerusahaan, docData.nama)) {
+            karyawanData.perusahaan = destinationPerusahaan.ref;
+          }
+          // await dbDestination.collection("karyawan").doc(karyawan.id).set(karyawanData);
+        }
+
+        // save departmentUser
+        for (let index = 0; index < sourceData.departmentUser.length; index++) {
+          const depUser = sourceData.departmentUser[index];
+          const depUserData = depUser.data();
+          // await dbDestination.collection("departmentUser").doc(depUser.id).set(depUserData);
+        }
+
+        // save jabatan
+        for (let index = 0; index < sourceData.jabatans.length; index++) {
+          const jabatan = sourceData.jabatans[index];
+          const jabatanData = jabatan.data();
+          // await dbDestination.collection("jabatan").doc(jabatan.id).set(jabatanData);
+        }
+
+        // save sampleDocument
+        for (let index = 0; index < sourceData.sampleDocuments.length; index++) {
+          const sampleDoc = sourceData.sampleDocuments[index];
+          const sampleDocData = sampleDoc.data();
+          if (isNeedChangePerusahaanId(existingPerusahaan, docData.nama)) {
+            sampleDocData.company = destinationPerusahaan.ref;
+          }
+          // await dbDestination.collection("sampleDocuments").doc(sampleDoc.id).set(sampleDocData);
+          
+          // upload the asset
+          const rawPath = decodeURIComponent(sampleDocData.fileUrl);
+
         }
       }
     }
@@ -218,4 +258,11 @@ const startMigrate = async () => {
   }
 };
 
-startMigrate();
+// startMigrate();
+
+const testCode = () => {
+  const fileUrl = 'https://firebasestorage.googleapis.com/v0/b/e-pkwt-14644.appspot.com/o/sampleDocuments%2Fc9e7d74b-0f1e-4367-9d95-95b5ba4e56db.pdf?alt=media&token=12a31edf-adc0-49bd-b72a-8ca6207d455d';
+  console.log(extractFilePath(fileUrl));
+}
+
+testCode();

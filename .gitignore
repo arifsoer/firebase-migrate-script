@@ -1,5 +1,6 @@
 /exported
 /node_modules
+.env
 
 # ignore file prefix
 e-pkwt-*
