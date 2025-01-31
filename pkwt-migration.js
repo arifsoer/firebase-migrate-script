@@ -243,11 +243,17 @@ const startMigrate = async () => {
           if (isNeedChangePerusahaanId(existingPerusahaan, docData.nama)) {
             sampleDocData.company = destinationPerusahaan.ref;
           }
+          // upload the asset
+          const rawPath = extractFilePath(sampleDocData.fileUrl);
+          await startMigrateStorage(rawPath);
+
+          // generate document url from destination
+          const fileUrl = destinationStorage.bucket(process.env.DESTINATION_BUCKET ?? "").file(rawPath);
+          
+          
           // await dbDestination.collection("sampleDocuments").doc(sampleDoc.id).set(sampleDocData);
           
-          // upload the asset
-          const rawPath = decodeURIComponent(sampleDocData.fileUrl);
-
+          
         }
       }
     }
