@@ -246,15 +246,51 @@ const startMigrate = async () => {
           // upload the asset
           const rawPath = extractFilePath(sampleDocData.fileUrl);
           await startMigrateStorage(rawPath);
-
-          // generate document url from destination
-          const fileUrl = destinationStorage.bucket(process.env.DESTINATION_BUCKET ?? "").file(rawPath);
-          
           
           // await dbDestination.collection("sampleDocuments").doc(sampleDoc.id).set(sampleDocData);
-          
-          
         }
+
+        // save template document
+        for (let index = 0; index < sourceData.templateDocuments.length; index++) {
+          const template = sourceData.templateDocuments[index];
+          const templateData = template.data()
+          if (isNeedChangePerusahaanId(existingPerusahaan, docData.nama)) {
+            templateData.perusahaan = destinationPerusahaan.ref;
+          }
+
+          // await dbDestination.collection("templateDocuments").doc(template.id).set(templateData);
+        }
+
+        // save tenaga kerja
+        for (let index = 0; index < sourceData.tenagaKerjas.length; index++) {
+          const tenagaKerja = sourceData.tenagaKerjas[index];
+          const tenagaKerjaData = tenagaKerja.data()
+          if (isNeedChangePerusahaanId(existingPerusahaan, docData.nama)) {
+            tenagaKerjaData.perusahaan = destinationPerusahaan.ref;
+          }
+
+          // save storage file CV
+          await startMigrateStorage(tenagaKerjaData.fileCV)
+          // save storage file Ijazah
+          await startMigrateStorage(tenagaKerjaData.fileIjazah)
+          // save storage file KK
+          await startMigrateStorage(tenagaKerjaData.fileKK)
+          // save storage file Lain2
+          await startMigrateStorage(tenagaKerjaData.fileLain2)
+          // save storage file fileLamaranKerja
+          await startMigrateStorage(tenagaKerjaData.fileLamaranKerja)
+          // save storage file fileSKCK
+          await startMigrateStorage(tenagaKerjaData.fileSKCK)
+          // save storage file fileVaksin
+          await startMigrateStorage(tenagaKerjaData.fileVaksin)
+          // save storage fotoKTP
+          await startMigrateStorage(tenagaKerjaData.fotoKTP)
+          // save storage fotoTenagaKerja
+          await startMigrateStorage(tenagaKerjaData.fotoTenagaKerja)
+
+          // await dbDestination.collection("tenagaKerja").doc(tenagaKerja.id).set(tenagaKerjaData);
+        }
+
       }
     }
     const end = moment();
