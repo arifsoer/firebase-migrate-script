@@ -16,6 +16,7 @@ const perusahaanToMigrate = [
 ];
 
 let dataCount = 0;
+let maxSaving = 100;
 
 // Initialize Firebase Admin
 const sourceProject = admin.initializeApp(
@@ -163,8 +164,30 @@ const extractFilePath = (fileUrl) => {
   const decodedUrl = decodeURIComponent(fileUrl);
   const removedQParams = decodedUrl.split("?")[0];
   const removedBaseUrl = removedQParams.split("com/o/")[1];
-  return removedBaseUrl
-}
+  return removedBaseUrl;
+};
+
+/**
+ *
+ * @param {string} collection
+ * @param {string} id
+ * @param {admin.firestore.DocumentData} data
+ */
+const savingFirestore = async (collection, id, data) => {
+  if (dataCount <= maxSaving) {
+    try {
+      await dbDestination.collection(collection).doc(id).set(data);
+      // adding count
+      dataCount++;
+    } catch (error) {
+      console.error(error);
+    }
+  } else {
+    // close the prosess
+    console.log("saving reach max limit, please continue later");
+    process.exit();
+  }
+};
 
 const startMigrate = async () => {
   const start = moment();
@@ -192,7 +215,7 @@ const startMigrate = async () => {
 
         if (!existingPerusahaan.includes(docData.nama)) {
           // save perusahaan data first
-          // await dbDestination.collection("perusahaan").doc(doc.id).set(docData);
+          await savingFirestore("perusahaan", doc.id, docData);
         }
 
         // save client
@@ -202,14 +225,14 @@ const startMigrate = async () => {
           if (isNeedChangePerusahaanId(existingPerusahaan, docData.nama)) {
             clientData.perusahaan = destinationPerusahaan.ref;
           }
-          // await dbDestination.collection("client").doc(client.id).set(clientData);
+          await savingFirestore("client", client.id, clientData);
         }
 
         // save departmentTK
         for (let index = 0; index < sourceData.departmentTk.length; index++) {
           const depTk = sourceData.departmentTk[index];
           const depTkData = depTk.data();
-          // await dbDestination.collection("departmentTK").doc(depTk.id).set(depTkData);
+          await savingFirestore("departmentTK", depTk.id, depTkData);
         }
 
         // save karyawan
@@ -219,25 +242,29 @@ const startMigrate = async () => {
           if (isNeedChangePerusahaanId(existingPerusahaan, docData.nama)) {
             karyawanData.perusahaan = destinationPerusahaan.ref;
           }
-          // await dbDestination.collection("karyawan").doc(karyawan.id).set(karyawanData);
+          await savingFirestore("karyawan", karyawan.id, karyawanData);
         }
 
         // save departmentUser
         for (let index = 0; index < sourceData.departmentUser.length; index++) {
           const depUser = sourceData.departmentUser[index];
           const depUserData = depUser.data();
-          // await dbDestination.collection("departmentUser").doc(depUser.id).set(depUserData);
+          await savingFirestore("departmentUser", depUser.id, depUserData);
         }
 
         // save jabatan
         for (let index = 0; index < sourceData.jabatans.length; index++) {
           const jabatan = sourceData.jabatans[index];
           const jabatanData = jabatan.data();
-          // await dbDestination.collection("jabatan").doc(jabatan.id).set(jabatanData);
+          await savingFirestore("jabatan", jabatan.id, jabatanData);
         }
 
         // save sampleDocument
-        for (let index = 0; index < sourceData.sampleDocuments.length; index++) {
+        for (
+          let index = 0;
+          index < sourceData.sampleDocuments.length;
+          index++
+        ) {
           const sampleDoc = sourceData.sampleDocuments[index];
           const sampleDocData = sampleDoc.data();
           if (isNeedChangePerusahaanId(existingPerusahaan, docData.nama)) {
@@ -246,51 +273,76 @@ const startMigrate = async () => {
           // upload the asset
           const rawPath = extractFilePath(sampleDocData.fileUrl);
           await startMigrateStorage(rawPath);
-          
-          // await dbDestination.collection("sampleDocuments").doc(sampleDoc.id).set(sampleDocData);
+
+          await savingFirestore("sampleDocuments", sampleDoc.id, sampleDocData);
         }
 
         // save template document
-        for (let index = 0; index < sourceData.templateDocuments.length; index++) {
+        for (
+          let index = 0;
+          index < sourceData.templateDocuments.length;
+          index++
+        ) {
           const template = sourceData.templateDocuments[index];
-          const templateData = template.data()
+          const templateData = template.data();
           if (isNeedChangePerusahaanId(existingPerusahaan, docData.nama)) {
             templateData.perusahaan = destinationPerusahaan.ref;
           }
 
-          // await dbDestination.collection("templateDocuments").doc(template.id).set(templateData);
+          await savingFirestore("templateDocuments", template.id, templateData);
         }
 
         // save tenaga kerja
         for (let index = 0; index < sourceData.tenagaKerjas.length; index++) {
           const tenagaKerja = sourceData.tenagaKerjas[index];
-          const tenagaKerjaData = tenagaKerja.data()
+          const tenagaKerjaData = tenagaKerja.data();
           if (isNeedChangePerusahaanId(existingPerusahaan, docData.nama)) {
             tenagaKerjaData.perusahaan = destinationPerusahaan.ref;
           }
 
           // save storage file CV
-          await startMigrateStorage(tenagaKerjaData.fileCV)
+          await startMigrateStorage(tenagaKerjaData.fileCV);
           // save storage file Ijazah
-          await startMigrateStorage(tenagaKerjaData.fileIjazah)
+          await startMigrateStorage(tenagaKerjaData.fileIjazah);
           // save storage file KK
-          await startMigrateStorage(tenagaKerjaData.fileKK)
+          await startMigrateStorage(tenagaKerjaData.fileKK);
           // save storage file Lain2
-          await startMigrateStorage(tenagaKerjaData.fileLain2)
+          await startMigrateStorage(tenagaKerjaData.fileLain2);
           // save storage file fileLamaranKerja
-          await startMigrateStorage(tenagaKerjaData.fileLamaranKerja)
+          await startMigrateStorage(tenagaKerjaData.fileLamaranKerja);
           // save storage file fileSKCK
-          await startMigrateStorage(tenagaKerjaData.fileSKCK)
+          await startMigrateStorage(tenagaKerjaData.fileSKCK);
           // save storage file fileVaksin
-          await startMigrateStorage(tenagaKerjaData.fileVaksin)
+          await startMigrateStorage(tenagaKerjaData.fileVaksin);
           // save storage fotoKTP
-          await startMigrateStorage(tenagaKerjaData.fotoKTP)
+          await startMigrateStorage(tenagaKerjaData.fotoKTP);
           // save storage fotoTenagaKerja
-          await startMigrateStorage(tenagaKerjaData.fotoTenagaKerja)
+          await startMigrateStorage(tenagaKerjaData.fotoTenagaKerja);
 
-          // await dbDestination.collection("tenagaKerja").doc(tenagaKerja.id).set(tenagaKerjaData);
+          await savingFirestore("tenagaKerja", tenagaKerja.id, tenagaKerjaData);
         }
 
+        // save generated document
+        for (
+          let index = 0;
+          index < sourceData.generatedDocuments.length;
+          index++
+        ) {
+          const generatedDoc = sourceData.generatedDocuments[index];
+          const generatedDocData = generatedDoc.data();
+          if (isNeedChangePerusahaanId(existingPerusahaan, docData.nama)) {
+            generatedDocData.perusahaan = destinationPerusahaan.ref;
+          }
+
+          // save storage file
+          await startMigrateStorage(generatedDocData.filePath);
+
+          await savingFirestore(
+            "generatedDocument",
+            generatedDoc.id,
+            generatedDocData
+          );
+        }
       }
     }
     const end = moment();
@@ -303,8 +355,9 @@ const startMigrate = async () => {
 // startMigrate();
 
 const testCode = () => {
-  const fileUrl = 'https://firebasestorage.googleapis.com/v0/b/e-pkwt-14644.appspot.com/o/sampleDocuments%2Fc9e7d74b-0f1e-4367-9d95-95b5ba4e56db.pdf?alt=media&token=12a31edf-adc0-49bd-b72a-8ca6207d455d';
+  const fileUrl =
+    "https://firebasestorage.googleapis.com/v0/b/e-pkwt-14644.appspot.com/o/sampleDocuments%2Fc9e7d74b-0f1e-4367-9d95-95b5ba4e56db.pdf?alt=media&token=12a31edf-adc0-49bd-b72a-8ca6207d455d";
   console.log(extractFilePath(fileUrl));
-}
+};
 
 testCode();
