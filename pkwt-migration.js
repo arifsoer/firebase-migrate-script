@@ -206,6 +206,7 @@ const startMigrate = async () => {
       const doc = getSourcePerusahaanList.docs[index];
       const docData = doc.data();
       if (perusahaanToMigrate.includes(docData.nama)) {
+
         const sourceData = await loadAllSourceData(doc);
 
         const destinationPerusahaan = getDestinationPerusahaanList.docs.find(
@@ -344,18 +345,28 @@ const startMigrate = async () => {
         }
       }
     }
-  } catch (error) { 
-    console.error(error);
+  } catch (error) {
+    console.error('Error start migrate :', error);
   }
 };
 
-// startMigrate();
-
 const main = async () => {
   const start = moment();
+
+  // process the param from cli
+  const args = process.argv.slice(2);
+  if (args[1]) {
+    const theMaxSaving = parseInt(args[1]);
+    if (theMaxSaving > 0) maxSaving = theMaxSaving;
+  } else {
+    console.log("Max saving not set, using default 100");
+    process.exit();
+  }
+
   await startMigrate();
+  
   const end = moment();
   console.log("Migration done in ", end.diff(start, "seconds"));
-}
+};
 
-main()
+main();
