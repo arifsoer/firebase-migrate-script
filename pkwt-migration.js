@@ -190,7 +190,6 @@ const savingFirestore = async (collection, id, data) => {
 };
 
 const startMigrate = async () => {
-  const start = moment();
   try {
     const getSourcePerusahaanList = await dbSource
       .collection("perusahaan")
@@ -345,19 +344,18 @@ const startMigrate = async () => {
         }
       }
     }
-    const end = moment();
-    console.log("Migration done in ", end.diff(start, "seconds"));
-  } catch (error) {
+  } catch (error) { 
     console.error(error);
   }
 };
 
 // startMigrate();
 
-const testCode = () => {
-  const fileUrl =
-    "https://firebasestorage.googleapis.com/v0/b/e-pkwt-14644.appspot.com/o/sampleDocuments%2Fc9e7d74b-0f1e-4367-9d95-95b5ba4e56db.pdf?alt=media&token=12a31edf-adc0-49bd-b72a-8ca6207d455d";
-  console.log(extractFilePath(fileUrl));
-};
+const main = async () => {
+  const start = moment();
+  await startMigrate();
+  const end = moment();
+  console.log("Migration done in ", end.diff(start, "seconds"));
+}
 
-testCode();
+main()
