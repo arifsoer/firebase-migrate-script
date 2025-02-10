@@ -54,6 +54,7 @@ const destinationStorage = getStorage(destinationProject);
  * @param {string} path
  */
 const startMigrateStorage = async (path) => {
+  console.log("Start migrate storage ", path);
   try {
     const copyDest = destinationStorage
       .bucket(process.env.DESTINATION_BUCKET ?? "")
@@ -63,7 +64,23 @@ const startMigrateStorage = async (path) => {
       .file(path)
       .copy(copyDest);
   } catch (error) {
-    console.error(error);
+    console.error(
+      "Error migrate storage ",
+      error.length > 1 ? error[1] : error
+    );
+  }
+};
+
+const getFilesFromFolders = async (folderPath) => {
+  console.log("Get files from folder ", folderPath);
+  try {
+    const [listFiles] = await storageSource
+      .bucket(process.env.SOURCE_BUCKET ?? "")
+      .getFiles({ prefix: folderPath });
+    return listFiles.map((file) => file.name);
+  } catch (error) {
+    console.error("Error get files from folder ", error);
+    return [];
   }
 };
 
@@ -154,6 +171,7 @@ const loadAllSourceData = async (perusahaan) => {
     tenagaKerjas: tenagaKerjas.docs,
     generatedDocuments: genDocsTk,
   };
+
   return returnData;
 };
 
@@ -168,24 +186,32 @@ const extractFilePath = (fileUrl) => {
 };
 
 /**
+ * function to check if the document already exist
+ */
+const isDocumentExist = async (collection, id) => {
+  const docRef = await dbDestination.collection(collection).doc(id).get();
+  return docRef.exists;
+};
+
+/**
  *
  * @param {string} collection
  * @param {string} id
  * @param {admin.firestore.DocumentData} data
  */
 const savingFirestore = async (collection, id, data) => {
-  if (dataCount <= maxSaving) {
-    try {
-      await dbDestination.collection(collection).doc(id).set(data);
-      // adding count
-      dataCount++;
-    } catch (error) {
-      console.error(error);
+  try {
+    // check if already exist
+    await dbDestination.collection(collection).doc(id).set(data);
+    // adding count
+    dataCount++;
+    console.log(`Data saved ${dataCount}`);
+    if (dataCount >= maxSaving) {
+      console.log("Max saving reached, exiting");
+      process.exit();
     }
-  } else {
-    // close the prosess
-    console.log("saving reach max limit, please continue later");
-    process.exit();
+  } catch (error) {
+    console.error(error);
   }
 };
 
@@ -206,8 +232,9 @@ const startMigrate = async () => {
       const doc = getSourcePerusahaanList.docs[index];
       const docData = doc.data();
       if (perusahaanToMigrate.includes(docData.nama)) {
-
+        console.log("Start loading data data for ", docData.nama);
         const sourceData = await loadAllSourceData(doc);
+        console.log("Data loaded for ", docData.nama);
 
         const destinationPerusahaan = getDestinationPerusahaanList.docs.find(
           (d) => d.data().nama === docData.nama
@@ -215,51 +242,79 @@ const startMigrate = async () => {
 
         if (!existingPerusahaan.includes(docData.nama)) {
           // save perusahaan data first
+          console.log("Saving perusahaan data ", docData.nama);
           await savingFirestore("perusahaan", doc.id, docData);
         }
 
         // save client
+        console.log("start saving client for perusahaan ", docData.nama);
         for (let index = 0; index < sourceData.clients.length; index++) {
           const client = sourceData.clients[index];
           const clientData = client.data();
           if (isNeedChangePerusahaanId(existingPerusahaan, docData.nama)) {
             clientData.perusahaan = destinationPerusahaan.ref;
           }
-          await savingFirestore("client", client.id, clientData);
+          const isExist = await isDocumentExist("client", client.id);
+          if (!isExist) {
+            await savingFirestore("client", client.id, clientData);
+          }
         }
 
         // save departmentTK
+        console.log("start saving departmentTK for perusahaan ", docData.nama);
         for (let index = 0; index < sourceData.departmentTk.length; index++) {
           const depTk = sourceData.departmentTk[index];
           const depTkData = depTk.data();
-          await savingFirestore("departmentTK", depTk.id, depTkData);
+          const isExist = await isDocumentExist("departmentTK", depTk.id);
+          if (!isExist) {
+            await savingFirestore("departmentTK", depTk.id, depTkData);
+          }
         }
 
         // save karyawan
+        console.log("start saving karyawan for perusahaan ", docData.nama);
         for (let index = 0; index < sourceData.karyawans.length; index++) {
           const karyawan = sourceData.karyawans[index];
           const karyawanData = karyawan.data();
           if (isNeedChangePerusahaanId(existingPerusahaan, docData.nama)) {
             karyawanData.perusahaan = destinationPerusahaan.ref;
           }
-          await savingFirestore("karyawan", karyawan.id, karyawanData);
+          const isExist = await isDocumentExist("karyawan", karyawan.id);
+          if (!isExist) {
+            await savingFirestore("karyawan", karyawan.id, karyawanData);
+          }
         }
 
         // save departmentUser
+        console.log(
+          "start saving departmentUser for perusahaan ",
+          docData.nama
+        );
         for (let index = 0; index < sourceData.departmentUser.length; index++) {
           const depUser = sourceData.departmentUser[index];
           const depUserData = depUser.data();
-          await savingFirestore("departmentUser", depUser.id, depUserData);
+          const isExist = await isDocumentExist("departmentUser", depUser.id);
+          if (!isExist) {
+            await savingFirestore("departmentUser", depUser.id, depUserData);
+          }
         }
 
         // save jabatan
+        console.log("start saving jabatan for perusahaan ", docData.nama);
         for (let index = 0; index < sourceData.jabatans.length; index++) {
           const jabatan = sourceData.jabatans[index];
           const jabatanData = jabatan.data();
-          await savingFirestore("jabatan", jabatan.id, jabatanData);
+          const isExist = await isDocumentExist("jabatan", jabatan.id);
+          if (!isExist) {
+            await savingFirestore("jabatan", jabatan.id, jabatanData);
+          }
         }
 
         // save sampleDocument
+        console.log(
+          "start saving sample Document for perusahaan ",
+          docData.nama
+        );
         for (
           let index = 0;
           index < sourceData.sampleDocuments.length;
@@ -270,14 +325,28 @@ const startMigrate = async () => {
           if (isNeedChangePerusahaanId(existingPerusahaan, docData.nama)) {
             sampleDocData.company = destinationPerusahaan.ref;
           }
-          // upload the asset
-          const rawPath = extractFilePath(sampleDocData.fileUrl);
-          await startMigrateStorage(rawPath);
+          const isExist = await isDocumentExist(
+            "sampleDocuments",
+            sampleDoc.id
+          );
+          if (!isExist) {
+            // upload the asset
+            const rawPath = extractFilePath(sampleDocData.fileUrl);
+            await startMigrateStorage(rawPath);
 
-          await savingFirestore("sampleDocuments", sampleDoc.id, sampleDocData);
+            await savingFirestore(
+              "sampleDocuments",
+              sampleDoc.id,
+              sampleDocData
+            );
+          }
         }
 
         // save template document
+        console.log(
+          "start saving template document for perusahaan ",
+          docData.nama
+        );
         for (
           let index = 0;
           index < sourceData.templateDocuments.length;
@@ -289,10 +358,21 @@ const startMigrate = async () => {
             templateData.perusahaan = destinationPerusahaan.ref;
           }
 
-          await savingFirestore("templateDocuments", template.id, templateData);
+          const isExist = await isDocumentExist(
+            "templateDocuments",
+            template.id
+          );
+          if (!isExist) {
+            await savingFirestore(
+              "templateDocuments",
+              template.id,
+              templateData
+            );
+          }
         }
 
         // save tenaga kerja
+        console.log("start saving tenaga kerja for perusahaan ", docData.nama);
         for (let index = 0; index < sourceData.tenagaKerjas.length; index++) {
           const tenagaKerja = sourceData.tenagaKerjas[index];
           const tenagaKerjaData = tenagaKerja.data();
@@ -300,29 +380,56 @@ const startMigrate = async () => {
             tenagaKerjaData.perusahaan = destinationPerusahaan.ref;
           }
 
-          // save storage file CV
-          await startMigrateStorage(tenagaKerjaData.fileCV);
-          // save storage file Ijazah
-          await startMigrateStorage(tenagaKerjaData.fileIjazah);
-          // save storage file KK
-          await startMigrateStorage(tenagaKerjaData.fileKK);
-          // save storage file Lain2
-          await startMigrateStorage(tenagaKerjaData.fileLain2);
-          // save storage file fileLamaranKerja
-          await startMigrateStorage(tenagaKerjaData.fileLamaranKerja);
-          // save storage file fileSKCK
-          await startMigrateStorage(tenagaKerjaData.fileSKCK);
-          // save storage file fileVaksin
-          await startMigrateStorage(tenagaKerjaData.fileVaksin);
-          // save storage fotoKTP
-          await startMigrateStorage(tenagaKerjaData.fotoKTP);
-          // save storage fotoTenagaKerja
-          await startMigrateStorage(tenagaKerjaData.fotoTenagaKerja);
+          const isExist = await isDocumentExist("tenagaKerja", tenagaKerja.id);
 
-          await savingFirestore("tenagaKerja", tenagaKerja.id, tenagaKerjaData);
+          if (!isExist) {
+            // check the documentTenagaKerja Folder
+            const tenagaKerjaFiles = await getFilesFromFolders(
+              `documentTenagaKerja/${tenagaKerja.id}`
+            );
+            // fix lain2 data issue
+            let fileNameLain2 = null;
+            tenagaKerjaFiles.forEach((fileName) => {
+              if (fileName.includes("lain2")) {
+                fileNameLain2 = fileName;
+              }
+            });
+            tenagaKerjaData.fileLain2 = fileNameLain2;
+            console.log("tenagaKerjaFiles ", tenagaKerjaFiles);
+            console.log("tenagaKerjaData ", tenagaKerjaData);
+
+            // save storage file CV
+            await startMigrateStorage(tenagaKerjaData.fileCV);
+            // save storage file Ijazah
+            await startMigrateStorage(tenagaKerjaData.fileIjazah);
+            // save storage file KK
+            await startMigrateStorage(tenagaKerjaData.fileKK);
+            // save storage file Lain2
+            await startMigrateStorage(tenagaKerjaData.fileLain2);
+            // save storage file fileLamaranKerja
+            await startMigrateStorage(tenagaKerjaData.fileLamaranKerja);
+            // save storage file fileSKCK
+            await startMigrateStorage(tenagaKerjaData.fileSKCK);
+            // save storage file fileVaksin
+            await startMigrateStorage(tenagaKerjaData.fileVaksin);
+            // save storage fotoKTP
+            await startMigrateStorage(tenagaKerjaData.fotoKTP);
+            // save storage fotoTenagaKerja
+            await startMigrateStorage(tenagaKerjaData.fotoTenagaKerja);
+
+            await savingFirestore(
+              "tenagaKerja",
+              tenagaKerja.id,
+              tenagaKerjaData
+            );
+          }
         }
 
         // save generated document
+        console.log(
+          "start saving generated document for perusahaan ",
+          docData.nama
+        );
         for (
           let index = 0;
           index < sourceData.generatedDocuments.length;
@@ -334,19 +441,25 @@ const startMigrate = async () => {
             generatedDocData.perusahaan = destinationPerusahaan.ref;
           }
 
-          // save storage file
-          await startMigrateStorage(generatedDocData.filePath);
-
-          await savingFirestore(
+          const isExist = await isDocumentExist(
             "generatedDocument",
-            generatedDoc.id,
-            generatedDocData
+            generatedDoc.id
           );
+          if (!isExist) {
+            // save storage file
+            await startMigrateStorage(generatedDocData.filePath);
+
+            await savingFirestore(
+              "generatedDocument",
+              generatedDoc.id,
+              generatedDocData
+            );
+          }
         }
       }
     }
   } catch (error) {
-    console.error('Error start migrate :', error);
+    console.error("Error start migrate :", error);
   }
 };
 
@@ -363,8 +476,10 @@ const main = async () => {
     process.exit();
   }
 
+  console.log("start migrating with max saving ", maxSaving);
+
   await startMigrate();
-  
+
   const end = moment();
   console.log("Migration done in ", end.diff(start, "seconds"));
 };
