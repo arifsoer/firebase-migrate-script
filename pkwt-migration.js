@@ -408,6 +408,10 @@ const startMigrate = async () => {
             tenagaKerjaData.fileLamaranKerja = checkAndGenerateTenagaKerjaFile(tenagaKerjaFiles, 'lamaranKerja');
             tenagaKerjaData.fileVaksin = checkAndGenerateTenagaKerjaFile(tenagaKerjaFiles, 'vaksin');
             tenagaKerjaData.fileIjazah = checkAndGenerateTenagaKerjaFile(tenagaKerjaFiles, 'ijazah');
+            tenagaKerjaData.fileCV = checkAndGenerateTenagaKerjaFile(tenagaKerjaFiles, 'cv');
+            tenagaKerjaData.fileKK = checkAndGenerateTenagaKerjaFile(tenagaKerjaFiles, 'kk');
+            tenagaKerjaData.fotoKTP = checkAndGenerateTenagaKerjaFile(tenagaKerjaFiles, 'ktp');
+            tenagaKerjaData.fotoTenagaKerja = checkAndGenerateTenagaKerjaFile(tenagaKerjaFiles, 'foto');
 
             // save storage file CV
             await startMigrateStorage(tenagaKerjaData.fileCV);
