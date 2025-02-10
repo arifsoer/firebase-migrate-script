@@ -54,20 +54,21 @@ const destinationStorage = getStorage(destinationProject);
  * @param {string} path
  */
 const startMigrateStorage = async (path) => {
-  console.log("Start migrate storage ", path);
-  try {
-    const copyDest = destinationStorage
-      .bucket(process.env.DESTINATION_BUCKET ?? "")
-      .file(path);
-    await storageSource
-      .bucket(process.env.SOURCE_BUCKET ?? "")
-      .file(path)
-      .copy(copyDest);
-  } catch (error) {
-    console.error(
-      "Error migrate storage ",
-      error.length > 1 ? error[1] : error
-    );
+  if (path) {
+    try {
+      const copyDest = destinationStorage
+        .bucket(process.env.DESTINATION_BUCKET ?? "")
+        .file(path);
+      await storageSource
+        .bucket(process.env.SOURCE_BUCKET ?? "")
+        .file(path)
+        .copy(copyDest);
+    } catch (error) {
+      console.error(
+        "Error migrate storage ",
+        error.length > 1 ? error[1] : error
+      );
+    }
   }
 };
 
@@ -214,6 +215,21 @@ const savingFirestore = async (collection, id, data) => {
     console.error(error);
   }
 };
+
+/**
+ * 
+ * @param {string[]} tenagaKerjaFiles 
+ * @param {string} queryFileName
+ */
+const checkAndGenerateTenagaKerjaFile = (tenagaKerjaFiles, queryFileName) => {
+  let fileNameLain2 = null;
+  tenagaKerjaFiles.forEach((fileName) => {
+    if (fileName.includes(queryFileName)) {
+      fileNameLain2 = fileName;
+    }
+  });
+  return fileNameLain2;
+}
 
 const startMigrate = async () => {
   try {
@@ -387,16 +403,11 @@ const startMigrate = async () => {
             const tenagaKerjaFiles = await getFilesFromFolders(
               `documentTenagaKerja/${tenagaKerja.id}`
             );
-            // fix lain2 data issue
-            let fileNameLain2 = null;
-            tenagaKerjaFiles.forEach((fileName) => {
-              if (fileName.includes("lain2")) {
-                fileNameLain2 = fileName;
-              }
-            });
-            tenagaKerjaData.fileLain2 = fileNameLain2;
-            console.log("tenagaKerjaFiles ", tenagaKerjaFiles);
-            console.log("tenagaKerjaData ", tenagaKerjaData);
+            tenagaKerjaData.fileLain2 = checkAndGenerateTenagaKerjaFile(tenagaKerjaFiles, 'lain2');
+            tenagaKerjaData.fileSKCK = checkAndGenerateTenagaKerjaFile(tenagaKerjaFiles, 'skck');
+            tenagaKerjaData.fileLamaranKerja = checkAndGenerateTenagaKerjaFile(tenagaKerjaFiles, 'lamaranKerja');
+            tenagaKerjaData.fileVaksin = checkAndGenerateTenagaKerjaFile(tenagaKerjaFiles, 'vaksin');
+            tenagaKerjaData.fileIjazah = checkAndGenerateTenagaKerjaFile(tenagaKerjaFiles, 'ijazah');
 
             // save storage file CV
             await startMigrateStorage(tenagaKerjaData.fileCV);
