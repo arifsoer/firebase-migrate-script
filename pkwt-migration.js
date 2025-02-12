@@ -73,7 +73,6 @@ const startMigrateStorage = async (path) => {
 };
 
 const getFilesFromFolders = async (folderPath) => {
-  console.log("Get files from folder ", folderPath);
   try {
     const [listFiles] = await storageSource
       .bucket(process.env.SOURCE_BUCKET ?? "")
@@ -172,6 +171,11 @@ const loadAllSourceData = async (perusahaan) => {
     tenagaKerjas: tenagaKerjas.docs,
     generatedDocuments: genDocsTk,
   };
+
+  const dataLength = Object.keys(returnData).reduce((total, key) => {
+    return returnData[key].length + total;
+  }, 0);
+  console.log(dataLength, " data loaded for ", perusahaan.data().nama);
 
   return returnData;
 };
