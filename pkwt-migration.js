@@ -221,8 +221,8 @@ const savingFirestore = async (collection, id, data) => {
 };
 
 /**
- * 
- * @param {string[]} tenagaKerjaFiles 
+ *
+ * @param {string[]} tenagaKerjaFiles
  * @param {string} queryFileName
  */
 const checkAndGenerateTenagaKerjaFile = (tenagaKerjaFiles, queryFileName) => {
@@ -233,7 +233,7 @@ const checkAndGenerateTenagaKerjaFile = (tenagaKerjaFiles, queryFileName) => {
     }
   });
   return fileNameLain2;
-}
+};
 
 const startMigrate = async () => {
   try {
@@ -407,15 +407,42 @@ const startMigrate = async () => {
             const tenagaKerjaFiles = await getFilesFromFolders(
               `documentTenagaKerja/${tenagaKerja.id}`
             );
-            tenagaKerjaData.fileLain2 = checkAndGenerateTenagaKerjaFile(tenagaKerjaFiles, 'lain2');
-            tenagaKerjaData.fileSKCK = checkAndGenerateTenagaKerjaFile(tenagaKerjaFiles, 'skck');
-            tenagaKerjaData.fileLamaranKerja = checkAndGenerateTenagaKerjaFile(tenagaKerjaFiles, 'lamaranKerja');
-            tenagaKerjaData.fileVaksin = checkAndGenerateTenagaKerjaFile(tenagaKerjaFiles, 'vaksin');
-            tenagaKerjaData.fileIjazah = checkAndGenerateTenagaKerjaFile(tenagaKerjaFiles, 'ijazah');
-            tenagaKerjaData.fileCV = checkAndGenerateTenagaKerjaFile(tenagaKerjaFiles, 'cv');
-            tenagaKerjaData.fileKK = checkAndGenerateTenagaKerjaFile(tenagaKerjaFiles, 'kk');
-            tenagaKerjaData.fotoKTP = checkAndGenerateTenagaKerjaFile(tenagaKerjaFiles, 'ktp');
-            tenagaKerjaData.fotoTenagaKerja = checkAndGenerateTenagaKerjaFile(tenagaKerjaFiles, 'foto');
+            tenagaKerjaData.fileLain2 = checkAndGenerateTenagaKerjaFile(
+              tenagaKerjaFiles,
+              "lain2"
+            );
+            tenagaKerjaData.fileSKCK = checkAndGenerateTenagaKerjaFile(
+              tenagaKerjaFiles,
+              "skck"
+            );
+            tenagaKerjaData.fileLamaranKerja = checkAndGenerateTenagaKerjaFile(
+              tenagaKerjaFiles,
+              "lamaranKerja"
+            );
+            tenagaKerjaData.fileVaksin = checkAndGenerateTenagaKerjaFile(
+              tenagaKerjaFiles,
+              "vaksin"
+            );
+            tenagaKerjaData.fileIjazah = checkAndGenerateTenagaKerjaFile(
+              tenagaKerjaFiles,
+              "ijazah"
+            );
+            tenagaKerjaData.fileCV = checkAndGenerateTenagaKerjaFile(
+              tenagaKerjaFiles,
+              "cv"
+            );
+            tenagaKerjaData.fileKK = checkAndGenerateTenagaKerjaFile(
+              tenagaKerjaFiles,
+              "kk"
+            );
+            tenagaKerjaData.fotoKTP = checkAndGenerateTenagaKerjaFile(
+              tenagaKerjaFiles,
+              "ktp"
+            );
+            tenagaKerjaData.fotoTenagaKerja = checkAndGenerateTenagaKerjaFile(
+              tenagaKerjaFiles,
+              "foto"
+            );
 
             // save storage file CV
             await startMigrateStorage(tenagaKerjaData.fileCV);
@@ -482,6 +509,104 @@ const startMigrate = async () => {
   }
 };
 
+const startUpdateStatusPernikahan = async () => {
+  try {
+    // get data status pernikahan
+    const getSourceStatusPernikahanList = await dbSource
+      .collection("statusPernikahan")
+      .get();
+    const getDestinationStatusPernikahanList = await dbDestination
+      .collection("statusPernikahan")
+      .get();
+    const destinationKodeMap = getDestinationStatusPernikahanList.docs.map(
+      (doc) => doc.data().kode
+    );
+
+    // loop data perinkahan from source
+    for (
+      let index = 0;
+      index < getSourceStatusPernikahanList.docs.length;
+      index++
+    ) {
+      const sourcePernikahanDoc = getSourceStatusPernikahanList.docs[index];
+      const sourcePernikahanData = sourcePernikahanDoc.data();
+      if (!destinationKodeMap.includes(sourcePernikahanData.kode)) {
+        await savingFirestore(
+          "statusPernikahan",
+          sourcePernikahanDoc.id,
+          sourcePernikahanData
+        );
+      }
+    }
+  } catch (error) {
+    console.error("Error update status pernikahan ", error);
+  }
+};
+
+const updateDataPernikahanTk = async () => {
+  try {
+    // get data status pernikahan
+    const getSourceStatusPernikahanList = await dbSource
+      .collection("statusPernikahan")
+      .get();
+    const getDestinationStatusPernikahanList = await dbDestination
+      .collection("statusPernikahan")
+      .get();
+
+    // load data tenaga kerja
+    const tenagaKerjas = await dbDestination
+      .collection("tenagaKerja")
+      // only for testing
+      // .limit(5)
+      .get();
+
+    console.log("Get data tenaga kerja ", tenagaKerjas.docs.length);
+
+    // loop the data
+    for (let index = 0; index < tenagaKerjas.docs.length; index++) {
+      const tenagaKerjaDoc = tenagaKerjas.docs[index];
+      const tenagaKerjaData = tenagaKerjaDoc.data();
+      if (tenagaKerjaData.statusPernikahan) {
+        const statusPernikahanTk = await tenagaKerjaData.statusPernikahan.get();
+        if (!statusPernikahanTk.exists) {
+          const statusPernikahanFromSource =
+            getSourceStatusPernikahanList.docs.find(
+              (doc) => doc.id === statusPernikahanTk.id
+            );
+          if (statusPernikahanFromSource) {
+            const statusPkFromDestination =
+              getDestinationStatusPernikahanList.docs.find(
+                (doc) =>
+                  doc.data().kode === statusPernikahanFromSource.data().kode
+              );
+            if (statusPkFromDestination) {
+              await dbDestination
+                .collection("tenagaKerja")
+                .doc(tenagaKerjaDoc.id)
+                .update({ statusPernikahan: statusPkFromDestination.ref });
+              dataCount++;
+              console.log(`Data saved ${dataCount}`);
+              if (dataCount >= maxSaving) {
+                console.log("Max saving reached, exiting");
+                process.exit();
+              }
+            } else {
+              console.log(
+                "Status pernikahan not found in destination ",
+                statusPernikahanFromSource.data().kode
+              );
+            }
+          } else {
+            console.log("Status pernikahan not found in source ", statusPernikahanTk.id);
+          }
+        }
+      }
+    }
+  } catch (error) {
+    console.error("Error update data pernikahan tenaga kerja ", error);
+  }
+};
+
 const main = async () => {
   const start = moment();
 
@@ -497,7 +622,9 @@ const main = async () => {
 
   console.log("start migrating with max saving ", maxSaving);
 
-  await startMigrate();
+  // await startMigrate();
+  // await startUpdateStatusPernikahan();
+  await updateDataPernikahanTk();
 
   const end = moment();
   console.log("Migration done in ", end.diff(start, "seconds"));
