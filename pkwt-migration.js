@@ -463,11 +463,14 @@ const startMigrate = async () => {
             // save storage fotoTenagaKerja
             await startMigrateStorage(tenagaKerjaData.fotoTenagaKerja);
 
-            await savingFirestore(
-              "tenagaKerja",
-              tenagaKerja.id,
-              tenagaKerjaData
-            );
+            const findSameNIK = await dbDestination.collection('tenagaKerja').where('nik', '==', tenagaKerjaData.nik).where('perusahaan', '==', destinationPerusahaan.ref).get();
+            if (findSameNIK.docs.length <= 0) {
+              await savingFirestore(
+                "tenagaKerja",
+                tenagaKerja.id,
+                tenagaKerjaData
+              );
+            }
           }
         }
 
