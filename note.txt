@@ -1,0 +1,46 @@
+curl --location 'https://asset-pkwt.pt-gemahripah.com/archive-file' \
+--header 'Content-Type: application/json' \
+--data '{
+"idTk": "28b5BjkgXVBVLOzhvSMC",
+"nik": "3525160107020001",
+"startPkwt": "25-05-2023",
+"nama": "Mohammad Irsyadul Ibad"
+}'
+
+final Map<String, Object> newDocData = {
+                                          'tanggalKeluar': Timestamp.fromDate(
+                                            DateTime.parse(
+                                                datePIckerController.text),
+                                          ),
+                                          'reasonKeluar': ketController.text
+                                        };
+
+                                        final newDataTK = {
+                                          'statusApproval': StatusApproval.pengajuanKembali.index,
+                                          'docData.reasonKeluar': newDocData['reasonKeluar'],
+                                          'docData.tanggalKeluar': newDocData['tanggalKeluar'],
+                                          'archive': FieldValue.arrayUnion([mapedArchive]),
+                                          'fotoTenagaKerja': null,
+                                          'fotoKTP': null,
+                                          'fileCV': null,
+                                          'fileKK': null,
+                                          'fileSKCK': null,
+                                          'fileVaksin': null,
+                                          'fileIjazah': null,
+                                          'fileLamaranKerja': null,
+                                          'fileLain2': null,
+                                          'updatedAt': Timestamp.fromDate(DateTime.now()),
+                                        };
+                                        await updateUpdatePartialTk(_idTenagaKerja.value, newDataTK);
+                                        if (_openedTenagaKerja.value.generatedDocument?.id != null) {
+                                          await updatePartialGeneratedDocument(
+                                              newDocData, _openedTenagaKerja.value.generatedDocument?.id ?? '');
+                                        }
+
+
+EKO SUPRIYONO	3525112808900001 YxI2Ziejk404AhcqwvCl {"pathFile":"archiveTenagaKerja/3525112808900001/EKO_SUPRIYONO_09-04-2025-1.zip","archiveTime":"2025-04-16T02:46:51.762Z"}
+MUHAMMAD SULFI BACHTIAR	3525103009930001 OquDxRs8c8eJWXo5rxXX {"pathFile":"archiveTenagaKerja/3525103009930001/MUHAMMAD_SULFI_BACHTIAR_25-03-2025.zip","archiveTime":"2025-04-16T03:18:22.533Z"}
+FAHMI IRSUANTO	3525042210980004 l1djTjQui5ZqCLElrcmw {"pathFile":"archiveTenagaKerja/3525042210980004/FAHMI_IRSUANTO_04-04-2023.zip","archiveTime":"2025-04-16T03:23:45.304Z"}
+NURMAN ABDILLAH	3525042105970002 UB1Jyac7gf6adTcj77H5 {"pathFile":"archiveTenagaKerja/3525042105970002/NURMAN_ABDILLAH_03-05-2023.zip","archiveTime":"2025-04-16T03:31:50.357Z"}
+M. ANDI ASHFIYAUDDIN	3525100303030003 pTbogVgpj0tgfEB1sjd1 {"pathFile":"archiveTenagaKerja/3525100303030003/M_Andi_Ashfiyauddin_03-05-2023.zip","archiveTime":"2025-04-16T03:41:34.473Z"}
+MOHAMMAD IRSYADUL IBAD	3525160107020001 28b5BjkgXVBVLOzhvSMC {"pathFile":"archiveTenagaKerja/3525160107020001/Mohammad_Irsyadul_Ibad_25-05-2023.zip","archiveTime":"2025-04-16T03:55:55.327Z"}

@@ -15,9 +15,21 @@ const destinationProject = admin.initializeApp(
   "destination"
 );
 
+const sourceProject = admin.initializeApp(
+  {
+    credential: admin.credential.applicationDefault(),
+    projectId: process.env.SOURCE_PROJECT ?? "",
+  },
+  "source"
+);
+
 const dbDestination = getFirestore(
   destinationProject,
   process.env.DESTINATION_DB ?? "pkwt-prod-dev-temp"
+);
+const dbSource = getFirestore(
+  sourceProject,
+  process.env.SOURCE_DB ?? "default"
 );
 
 /**
@@ -58,10 +70,10 @@ const toUpdateDataTK = async (perusahaanDoc) => {
  * @param {admin.firestore.QueryDocumentSnapshot} perusahaanDoc 
  */
 const toUpdateGeneratedDoc = async (perusahaanDoc) => {
+  console.log("start update generated document");
   const generatedDocuments = await dbDestination
     .collection("generatedDocument")
     .where("perusahaan", "==", perusahaanDoc.ref)
-    .limit(2)
     .get();
   console.log("generatedDocuments ", generatedDocuments.size);
 
@@ -100,6 +112,41 @@ const toUpdateGeneratedDoc = async (perusahaanDoc) => {
   }
 };
 
+const toFixStatusPernikahan = async (perusahaanDoc) => {
+  console.log("start update statusPernikahan");
+  const statusPernikahan = await dbDestination
+    .collection("statusPernikahan")
+    .get();
+  const statusPernikahanIds = statusPernikahan.docs.map(doc => doc.id);
+  const statusPernikahanDocs = statusPernikahan.docs;
+
+  // console.log('start check tenaga kerja')
+  // const tenagaKerjas = await dbDestination.collection('tenagaKerja').where('perusahaan', '==', perusahaanDoc.ref).get();
+  // for (const tenagaKerja of tenagaKerjas.docs) {
+  //   const tkData = tenagaKerja.data();
+  //   if (tkData.statusPernikahan && !statusPernikahanIds.includes(tkData.statusPernikahan.id)) {
+  //     console.log('is status pernikahan not exist ', count++)
+  //   }
+  // }
+
+  console.log('start check generated document')
+  const tks = await dbDestination.collection('tenagaKerja').doc('Sgk6UWhmTqLkhs5uOBOr').get()
+  // console.log(tks.ref);
+  const generatedDocuments = await dbDestination.collection('generatedDocument').where('tenagaKerja', '==', tks.ref).get();
+  console.log('generatedDocuments ', generatedDocuments.docs);
+  for (const generatedDocument of generatedDocuments.docs) {
+    const docData = generatedDocument.data();
+    console.log(docData);
+    // const docDataTk = docData.docDataTk;
+    // if (docDataTk && docDataTk.docData && docDataTk.docData.statusPernikahan) {
+    //   const statusPernikahanId = docDataTk.statusPernikahan.id;
+    //   if (!statusPernikahanIds.includes(statusPernikahanId)) {
+    //     console.log('is status pernikahan not exist ', count++)
+    //   }
+    // }
+  }
+}
+
 const main = async () => {
   try {
     // to load perusahaan
@@ -112,7 +159,8 @@ const main = async () => {
       console.log("perusahaan ", docData.nama);
       console.log("perusahaan Id ", doc.id);
       // await toUpdateDataTK(doc);
-      await toUpdateGeneratedDoc(doc);
+      // await toUpdateGeneratedDoc(doc);
+      await toFixStatusPernikahan(doc);
     }
 
     console.log("Data Update successfully.");
