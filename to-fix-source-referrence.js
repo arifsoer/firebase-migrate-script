@@ -60,21 +60,31 @@ const toUpdateGeneratedDocRefference = async () => {
     for (const doc of snapshot.docs) {
       const idData = doc.id;
       const data = doc.data();
-      const clientSegment = data.client._path.segments;
-      const tenagaKerjaSegment = data.tenagaKerja._path.segments;
 
-      // get data ref
-      const clientRef = dbDestination
-        .collection(clientSegment[clientSegment.length - 2])
-        .doc(clientSegment[clientSegment.length - 1]);
-      const tenagaKerjaRef = dbDestination
-        .collection(tenagaKerjaSegment[tenagaKerjaSegment.length - 2])
-        .doc(tenagaKerjaSegment[tenagaKerjaSegment.length - 1]);
+      const dataToUpdate = {};
 
-      await dbDestination.collection(sourceCollectionName).doc(idData).update({
-        client: clientRef,
-        tenagaKerja: tenagaKerjaRef,
-      });
+      if (data.client) {
+        const clientSegment = data.client._path.segments;
+        const clientRef = dbDestination
+          .collection(clientSegment[clientSegment.length - 2])
+          .doc(clientSegment[clientSegment.length - 1]);
+        dataToUpdate["client"] = clientRef;
+      }
+
+      if (data.tenagaKerja) {
+        const tenagaKerjaSegment = data.tenagaKerja._path.segments;
+        const tenagaKerjaRef = dbDestination
+          .collection(tenagaKerjaSegment[tenagaKerjaSegment.length - 2])
+          .doc(tenagaKerjaSegment[tenagaKerjaSegment.length - 1]);
+        dataToUpdate["tenagaKerja"] = tenagaKerjaRef;
+      }
+
+      if (Object.keys(dataToUpdate).length > 0) {
+        await dbDestination
+          .collection(sourceCollectionName)
+          .doc(idData)
+          .update(dataToUpdate);
+      }
     }
     console.log("Update generated document successfully for : ", snapshot.size);
   } catch (error) {
@@ -93,19 +103,21 @@ const toUpdateTenagakerjDocRef = async () => {
       const idData = doc.id;
       const data = doc.data();
 
-      // get data ref
-      const statusPernikahanSegment = data.statusPernikahan._path.segments;
-      const statusPernikahanRef = dbDestination
-        .collection(statusPernikahanSegment[statusPernikahanSegment.length - 2])
-        .doc(statusPernikahanSegment[statusPernikahanSegment.length - 1]);
+      if (data.statusPernikahan) {
+        const statusPernikahanSegment = data.statusPernikahan._path.segments;
+        const statusPernikahanRef = dbDestination
+          .collection(
+            statusPernikahanSegment[statusPernikahanSegment.length - 2]
+          )
+          .doc(statusPernikahanSegment[statusPernikahanSegment.length - 1]);
 
-      console.log(`to update data tk : ${idData} with data `, {
-        statusPernikahan: statusPernikahanRef.path,
-      });
-
-      // await dbDestination.collection(sourceCollectionName).doc(idData).update({
-      //   statusPernikahan: statusPernikahanRef,
-      // });
+        await dbDestination
+          .collection(sourceCollectionName)
+          .doc(idData)
+          .update({
+            statusPernikahan: statusPernikahanRef,
+          });
+      }
     }
   } catch (error) {
     console.error("Error in update tenaga kerja document:", error);
@@ -129,20 +141,44 @@ const toTestData = async () => {
       const data = doc.data();
 
       // get data ref
-      const statusPernikahanSegment = data.statusPernikahan._path.segments;
-      const statusPernikahanRef = dbDestination
-        .collection(statusPernikahanSegment[statusPernikahanSegment.length - 2])
-        .doc(statusPernikahanSegment[statusPernikahanSegment.length - 1]);
+      if (data.statusPernikahan) {
+        const statusPernikahanSegment = data.statusPernikahan._path.segments;
+        const statusPernikahanRef = dbDestination
+          .collection(
+            statusPernikahanSegment[statusPernikahanSegment.length - 2]
+          )
+          .doc(statusPernikahanSegment[statusPernikahanSegment.length - 1]);
 
-      if (!statusIds.includes(statusPernikahanRef.id)) {
-        console.log(
-          "this id not in current statusPernikahan : ",
-          statusPernikahanRef.id
-        );
+        if (!statusIds.includes(statusPernikahanRef.id)) {
+          console.log(
+            "this id not in current statusPernikahan : ",
+            statusPernikahanRef.id
+          );
+        }
       }
     }
   } catch (error) {
     console.error("Error in update tenaga kerja document:", error);
+  }
+};
+
+const toCheckNullEndData = async () => {
+  try {
+    const snapTk = await dbDestination
+      .collection("tenagaKerja")
+      .where("pkwtEndDate", "==", null)
+      .get();
+
+    for (const doc of snapTk.docs) {
+      const data = doc.data();
+
+      await dbDestination.collection("tenagaKerja").doc(doc.id).update({
+        pkwtEndDate: data["createdAt"],
+      });
+      console.log('updated data for id ', doc.id)
+    }
+  } catch (error) {
+    console.log("Error to check endDate ", error);
   }
 };
 
@@ -152,7 +188,8 @@ const main = async () => {
     console.log("start execution : ", now.toLocaleString());
     // await toUpdateGeneratedDocRefference();
     // await toUpdateTenagakerjDocRef();
-    await toTestData();
+    // await toTestData();
+    await toCheckNullEndData();
 
     const endTime = moment();
     console.log("end execution : ", endTime.toLocaleString());
