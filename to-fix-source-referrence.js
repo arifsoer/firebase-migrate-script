@@ -175,10 +175,60 @@ const toCheckNullEndData = async () => {
       await dbDestination.collection("tenagaKerja").doc(doc.id).update({
         pkwtEndDate: data["createdAt"],
       });
-      console.log('updated data for id ', doc.id)
+      console.log("updated data for id ", doc.id);
     }
   } catch (error) {
     console.log("Error to check endDate ", error);
+  }
+};
+
+const toCheckDeletedStatusPernikahan = async () => {
+  try {
+    const tkWIthNoDataPernikahan = [];
+
+    const snapTk = await dbDestination
+      .collection("tenagaKerja")
+      // .where("statusPernikahan", "!=", null)
+      // .limit(1000)
+      .get();
+    const snapStatusPernikahan = await dbDestination
+      .collection("statusPernikahan")
+      .get();
+
+    const dataPernikahanIds = snapStatusPernikahan.docs.map((x) => x.id);
+
+    const dataPernikahanTk = snapTk.docs.map((x) => {
+      const ref = x.data()["statusPernikahan"];
+      const result = {
+        id: x.id,
+        idPernikahan: ref ? ref._path.segments[1] : null,
+      };
+      ``;
+      return result;
+    });
+
+    for (let index = 0; index < dataPernikahanTk.length; index++) {
+      const pernikahanTk = dataPernikahanTk[index];
+
+      if (!dataPernikahanIds.includes(pernikahanTk.idPernikahan)) {
+        // console.log(
+        //   `tk : ${pernikahanTk.id} data pernikahan ${pernikahanTk.idPernikahan} not found`
+        // );
+        tkWIthNoDataPernikahan.push(pernikahanTk);
+      }
+    }
+
+    const missingIdPernikahan = tkWIthNoDataPernikahan.map(
+      (x) => x.idPernikahan
+    );
+
+    console.log("total data tk ", snapTk.docs.length);
+    console.log("ressult ", tkWIthNoDataPernikahan.length);
+    console.log("data pernikahan that missing is ", [
+      ...new Set(missingIdPernikahan),
+    ]);
+  } catch (error) {
+    console.log(error);
   }
 };
 
@@ -189,7 +239,8 @@ const main = async () => {
     // await toUpdateGeneratedDocRefference();
     // await toUpdateTenagakerjDocRef();
     // await toTestData();
-    await toCheckNullEndData();
+    // await toCheckNullEndData();
+    await toCheckDeletedStatusPernikahan();
 
     const endTime = moment();
     console.log("end execution : ", endTime.toLocaleString());
